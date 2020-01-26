@@ -1,0 +1,129 @@
+- hosts: all
+  become: yes
+  vars:
+    # kubernetes_version : "=1.15.3-00"
+    # validated_dockerv: "=5:18.09.8~3-0~ubuntu-xenial"
+    kubernetes_version : "=1.17.0-00"
+    validated_dockerv: "=5:19.03.4~3-0~ubuntu-xenial"
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+    # Install Docker and its dependent components.
+    # [WARNING]: Could not find aptitude. Using apt-get instead fix
+  # Container runtimes
+  # https://kubernetes.io/docs/setup/production-environment/container-runtimes/#docker
+   - name: "APT: Install aptitude package"
+     apt:
+       name: aptitude
+       force_apt_get: yes
+   - name: Install packages that allow apt to be used over HTTPS
+     apt:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+     vars:
+        packages:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - software-properties-common
+   - name: Add an apt signing key for Docker
+     apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+   - name: Add apt repository for stable version
+     apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
+        state: present
+   - name: Install docker and its dependecies
+     apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+     vars:
+      packages:
+      - 'docker-ce{{ validated_dockerv }}'
+      # - 'docker-ce-cli{{ validated_dockerv }}'
+      # - containerd.io
+   - name: Uploading daemon.json
+     template:
+          src: daemon.json.j2
+          dest: /etc/docker/daemon.json
+          owner: root
+          group: root
+          mode: 0644
+   - name: Create /etc/systemd/system/docker.service.d if it does not exist
+     file:
+        path: /etc/systemd/system/docker.service.d
+        state: directory
+        mode: '0755'
+   # Restart docker.
+   - name: Run systemctl daemon-reload
+     command: systemctl daemon-reload
+   - name: Run systemctl restart docker
+     command: systemctl restart docker
+   - name: Add vagrant user to docker group
+     user:
+      name: vagrant
+      group: docker
+    # Setup daemon.
+    # https://kubernetes.io/docs/setup/production-environment/container-runtimes/#docker
+   # Installing kubeadm
+    # Swap disabled. You MUST disable swap in order for the kubelet to work properly
+    # https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#configure-cgroup-driver-used-by-kubelet-on-control-plane-node
+   - name: "Remove swapfile from /etc/fstab"
+     mount:
+        name: "{{ item }}"
+        fstype: swap
+        state: absent
+     with_items:
+        - swap
+        - none
+   - name: "Disable swap"
+     command: swapoff -a
+    # Installing kubeadm, kubelet and kubectl
+    # https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#configure-cgroup-driver-used-by-kubelet-on-control-plane-node
+   - name: "add Kubernetes apt-key"
+     apt_key:
+       url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+       state: present
+   - name: "add Kubernetes' APT repository"
+     apt_repository:
+      repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+      state: present
+      filename: 'kubernetes'
+   - name: "Install Kubernetes binaries"
+     apt:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+     vars:
+      packages:
+        - 'kubelet{{ kubernetes_version }}'
+        - 'kubeadm{{ kubernetes_version }}'
+        # - 'kubelet'
+        # - 'kubeadm'
+   - name: "run apt-mark hold kubelet kubeadm"
+     command: apt-mark hold kubelet kubeadm
+
+  # handlers:
+  # - name: docker status
+  #   service: name=docker state=started
+
+- hosts: masters
+  become: yes
+  vars:
+    # kubernetes_version : "=1.15.3-00"
+    kubernetes_version : "=1.17.0-00"
+    ansible_python_interpreter: /usr/bin/python3
+  tasks:
+   - name: Install Kubernetes binaries
+     apt:
+      force: yes
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+     vars:
+      packages:
+        - 'kubectl{{ kubernetes_version }}'
+   - name: "run apt-mark hold kubectl"
+     command: apt-mark hold kubectl
