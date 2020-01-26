@@ -218,31 +218,6 @@ https://www.vagrantup.com/docs/provisioning/ansible_intro.html
 
 smoke test helloworld
 ~~~~
-
-vagrant@remotecontrol01:~$ cat /vagrant/kubernetes-tutorial-4/load-balancer-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app.kubernetes.io/name: load-balancer-example
-  name: hello-world
-spec:
-  # replicas: 5
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: load-balancer-example
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: load-balancer-example
-    spec:
-      containers:
-      - image: gcr.io/google-samples/node-hello:1.0
-        name: hello-world
-        ports:
-        - containerPort: 8080
-
         vagrant@remotecontrol01:~$ kubectl create -f /vagrant/kubernetes-tutorial-4/load-balancer-deployment
         deployment.apps/hello-world created
 
